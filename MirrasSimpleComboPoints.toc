@@ -1,0 +1,11 @@
+## Interface: 16001, 16000
+## Title: Mirra's Simple Combo Points
+## Notes: Shows your combo points on your target's nameplate.
+## Author: Kekshaus
+## Version: 2.0.2
+## SavedVariables: MirrasSimpleComboPointsDB
+## IconTexture: Interface\AddOns\MirrasSimpleComboPoints\icon
+## AddonCompartmentFunc: MirrasSimpleComboPoints_OnCompartmentClick
+
+MirrasSimpleComboPoints.lua
+Options.lua
