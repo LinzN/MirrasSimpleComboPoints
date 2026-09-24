@@ -2,172 +2,197 @@
 
 local ADDON, ns = ...
 
-local FLAT = "Interface\\Buttons\\WHITE8X8"
-local window
+local PANEL_NAME = "Mirra's Simple Combo Points"
+local PREFIX = "|cffffcc00MSCP|r: "
+
+local L = {
+    SUBTITLE        = "Combo points on your target's nameplate.",
+    PREVIEW         = "Preview",
+    PREVIEW_DESC    = "(dummy nameplate – updates live with your settings)",
+    DUMMY_NAME      = "Training Dummy",
+    APPEARANCE      = "Appearance",
+    POSITION        = "Position",
+    COLORS          = "Colors",
+    BEHAVIOR        = "Behavior",
+    SHAPE           = "Shape",
+    ROUND           = "Round",
+    SQUARE          = "Square",
+    SIZE            = "Pip size",
+    SPACING         = "Spacing",
+    OPACITY         = "Opacity",
+    ANCHOR          = "Anchor",
+    ABOVE           = "Above health bar",
+    BELOW           = "Below health bar",
+    OFFSET_X        = "Horizontal offset",
+    OFFSET_Y        = "Vertical offset",
+    COLOR_MODE      = "Color mode",
+    GRADIENT        = "Gradient",
+    SINGLE          = "Single color",
+    COLOR_START     = "Color / gradient start",
+    COLOR_END       = "Gradient end",
+    FULL            = "Custom color when full",
+    FULL_DESC       = "Separate color when all combo points are up.",
+    COLOR_FULL      = "Full points color",
+    COLOR_EMPTY     = "Empty slot color",
+    SHOW_EMPTY      = "Show empty slots",
+    SHOW_EMPTY_DESC = "Dark slots for missing combo points.",
+    HIDE_ZERO       = "Hide at 0 combo points",
+    HIDE_ZERO_DESC  = "Hides everything while the target has no combo points.",
+    RESET           = "Restore defaults",
+    RESET_DONE      = "Settings restored to defaults.",
+    HINT            = "Note: Only tested with the default Blizzard nameplates. Enemy nameplates must be enabled (V).\nQuick access: /mscp",
+}
+
+local panel, category
 local controls = {}
 
 local function Apply()
     if ns.Update then ns.Update() end
 end
 
-local function Label(parent, text, size, r, g, b)
-    local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local function Register(w)
+    controls[#controls + 1] = w
+    return w
+end
+
+local function SectionHeader(parent, text, x, y)
+    local fs = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    fs:SetPoint("TOPLEFT", x, y)
     fs:SetText(text)
-    if size then
-        local font, _, flags = fs:GetFont()
-        fs:SetFont(font, size, flags)
-    end
-    if r then fs:SetTextColor(r, g, b) end
+    local line = parent:CreateTexture(nil, "ARTWORK")
+    line:SetColorTexture(1, 0.82, 0, 0.25)
+    line:SetHeight(1)
+    line:SetPoint("LEFT", fs, "RIGHT", 8, 0)
+    line:SetWidth(270 - fs:GetStringWidth() - 8)
     return fs
 end
 
-local function Box(frame, r, g, b, a)
-    local t = frame:CreateTexture(nil, "BACKGROUND")
-    t:SetAllPoints()
-    t:SetColorTexture(r, g, b, a)
-    return t
-end
+local function Checkbox(parent, key, label, desc, x, y)
+    local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    cb:SetSize(26, 26)
+    cb:SetPoint("TOPLEFT", x - 4, y)
 
-local function Border(frame, r, g, b, a)
-    local function line(p1, p2, w, h)
-        local t = frame:CreateTexture(nil, "BORDER")
-        t:SetColorTexture(r, g, b, a)
-        t:SetPoint(p1); t:SetPoint(p2)
-        if w then t:SetWidth(w) end
-        if h then t:SetHeight(h) end
-    end
-    line("TOPLEFT", "TOPRIGHT", nil, 1)
-    line("BOTTOMLEFT", "BOTTOMRIGHT", nil, 1)
-    line("TOPLEFT", "BOTTOMLEFT", 1, nil)
-    line("TOPRIGHT", "BOTTOMRIGHT", 1, nil)
-end
+    local text = cb:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    text:SetPoint("LEFT", cb, "RIGHT", 4, 1)
+    text:SetText(label)
 
-local function Slider(parent, label, key, minV, maxV, step, fmt)
-    local f = CreateFrame("Frame", nil, parent)
-    f:SetSize(300, 40)
-
-    local title = Label(f, label, 12, 1, 0.82, 0)
-    title:SetPoint("TOPLEFT", 0, 0)
-
-    local valueText = Label(f, "", 12, 1, 1, 1)
-    valueText:SetPoint("TOPRIGHT", 0, 0)
-
-    local s = CreateFrame("Slider", nil, f)
-    s:SetOrientation("HORIZONTAL")
-    s:SetPoint("TOPLEFT", 0, -18)
-    s:SetPoint("TOPRIGHT", 0, -18)
-    s:SetHeight(16)
-    s:SetMinMaxValues(minV, maxV)
-    s:SetValueStep(step)
-    if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
-    s:EnableMouseWheel(true)
-
-    local track = s:CreateTexture(nil, "BACKGROUND")
-    track:SetColorTexture(0.15, 0.15, 0.15, 1)
-    track:SetPoint("LEFT"); track:SetPoint("RIGHT")
-    track:SetHeight(6)
-
-    local thumb = s:CreateTexture(nil, "OVERLAY")
-    thumb:SetColorTexture(1, 0.75, 0.1, 1)
-    thumb:SetSize(10, 16)
-    s:SetThumbTexture(thumb)
-
-    local function show(v)
-        valueText:SetText(string.format(fmt or "%d", v))
+    if desc then
+        local sub = cb:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+        sub:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, -3)
+        sub:SetWidth(240)
+        sub:SetJustifyH("LEFT")
+        sub:SetText(desc)
     end
 
-    s:SetScript("OnValueChanged", function(self, v)
-        v = math.floor(v / step + 0.5) * step
-        show(v)
-        if self.updating then return end
-        ns.db[key] = v
+    cb:SetScript("OnClick", function(self)
+        ns.db[key] = self:GetChecked() and true or false
+        if PlaySound and SOUNDKIT then
+            PlaySound(ns.db[key] and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+        end
         Apply()
     end)
-    s:SetScript("OnMouseWheel", function(self, delta)
-        self:SetValue(self:GetValue() + delta * step)
-    end)
-
-    f.Refresh = function()
-        s.updating = true
-        s:SetValue(ns.db[key])
-        show(ns.db[key])
-        s.updating = false
-    end
-    return f
+    cb.Refresh = function() cb:SetChecked(ns.db[key]) end
+    return Register(cb)
 end
 
-local function Check(parent, label, getter, setter)
-    local b = CreateFrame("Button", nil, parent)
-    b:SetSize(300, 20)
+local function Cycle(parent, key, label, options, x, y)
+    local text = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    text:SetPoint("TOPLEFT", x, y - 5)
+    text:SetText(label)
 
-    local box = CreateFrame("Frame", nil, b)
-    box:SetSize(16, 16)
-    box:SetPoint("LEFT", 0, 0)
-    Box(box, 0.1, 0.1, 0.1, 1)
-    Border(box, 0.5, 0.5, 0.5, 1)
+    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    btn:SetSize(140, 22)
+    btn:SetPoint("TOPLEFT", x + 130, y)
 
-    local tick = box:CreateTexture(nil, "OVERLAY")
-    tick:SetPoint("TOPLEFT", 3, -3)
-    tick:SetPoint("BOTTOMRIGHT", -3, 3)
-    tick:SetColorTexture(1, 0.75, 0.1, 1)
-
-    local text = Label(b, label, 12, 1, 1, 1)
-    text:SetPoint("LEFT", box, "RIGHT", 8, 0)
-
-    local hl = b:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints(box)
-    hl:SetColorTexture(1, 1, 1, 0.15)
-
-    b:SetScript("OnClick", function()
-        setter(not getter())
-        tick:SetShown(getter())
-        Apply()
-    end)
-    b.Refresh = function() tick:SetShown(getter() and true or false) end
-    return b
-end
-
-local function Button(parent, text, w, onClick)
-    local b = CreateFrame("Button", nil, parent)
-    b:SetSize(w or 120, 22)
-    Box(b, 0.2, 0.2, 0.2, 1)
-    Border(b, 0.5, 0.5, 0.5, 1)
-    local fs = Label(b, text, 12, 1, 1, 1)
-    fs:SetPoint("CENTER")
-    b.text = fs
-    local hl = b:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints()
-    hl:SetColorTexture(1, 0.75, 0.1, 0.2)
-    b:SetScript("OnClick", onClick)
-    return b
-end
-
-local function Cycle(parent, label, key, options)
-    local f = CreateFrame("Frame", nil, parent)
-    f:SetSize(300, 22)
-    local title = Label(f, label, 12, 1, 0.82, 0)
-    title:SetPoint("LEFT", 0, 0)
-
-    local btn
     local function textFor(v)
         for _, o in ipairs(options) do
             if o[1] == v then return o[2] end
         end
         return tostring(v)
     end
-    btn = Button(f, "", 170, function()
+    btn:SetScript("OnClick", function()
         local idx = 1
         for i, o in ipairs(options) do
             if o[1] == ns.db[key] then idx = i end
         end
-        idx = idx % #options + 1
-        ns.db[key] = options[idx][1]
-        btn.text:SetText(textFor(ns.db[key]))
+        ns.db[key] = options[idx % #options + 1][1]
+        btn:SetText(textFor(ns.db[key]))
         Apply()
     end)
-    btn:SetPoint("RIGHT", 0, 0)
-    f.Refresh = function() btn.text:SetText(textFor(ns.db[key])) end
-    return f
+    btn.Refresh = function() btn:SetText(textFor(ns.db[key])) end
+    return Register(btn)
+end
+
+local function RoundTo(v, step)
+    return math.floor(v / step + 0.5) * step
+end
+
+local function FallbackSlider(holder, key, minV, maxV, step, fmt)
+    local s = CreateFrame("Slider", nil, holder)
+    s:SetOrientation("HORIZONTAL")
+    s:SetSize(200, 16)
+    s:SetMinMaxValues(minV, maxV)
+    s:SetValueStep(step)
+    if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
+    local track = s:CreateTexture(nil, "BACKGROUND")
+    track:SetColorTexture(0.15, 0.15, 0.15, 1)
+    track:SetPoint("LEFT"); track:SetPoint("RIGHT")
+    track:SetHeight(6)
+    local thumb = s:CreateTexture(nil, "OVERLAY")
+    thumb:SetColorTexture(1, 0.75, 0.1, 1)
+    thumb:SetSize(10, 16)
+    s:SetThumbTexture(thumb)
+    local value = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    value:SetPoint("LEFT", s, "RIGHT", 8, 0)
+    s:SetScript("OnValueChanged", function(self, v)
+        v = RoundTo(v, step)
+        value:SetText(fmt(v))
+        if self.updating then return end
+        ns.db[key] = v
+        Apply()
+    end)
+    s.Refresh = function()
+        s.updating = true
+        s:SetValue(ns.db[key])
+        value:SetText(fmt(ns.db[key]))
+        s.updating = false
+    end
+    return s
+end
+
+local function Slider(parent, key, label, minV, maxV, step, fmt, x, y)
+    fmt = fmt or function(v) return tostring(math.floor(v + 0.5)) end
+    local holder = CreateFrame("Frame", nil, parent)
+    holder:SetSize(270, 44)
+    holder:SetPoint("TOPLEFT", x, y)
+
+    local text = holder:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    text:SetPoint("TOPLEFT", 0, 0)
+    text:SetText(label)
+
+    local ok, s = pcall(CreateFrame, "Frame", nil, holder, "MinimalSliderWithSteppersTemplate")
+    if ok and s and s.Init and MinimalSliderWithSteppersMixin then
+        s:SetSize(230, 20)
+        s:SetPoint("TOPLEFT", text, "BOTTOMLEFT", -2, -4)
+        local formatters
+        if CreateMinimalSliderFormatter and MinimalSliderWithSteppersMixin.Label then
+            formatters = {
+                [MinimalSliderWithSteppersMixin.Label.Right] =
+                    CreateMinimalSliderFormatter(MinimalSliderWithSteppersMixin.Label.Right, fmt),
+            }
+        end
+        s:Init(ns.db[key], minV, maxV, math.floor((maxV - minV) / step + 0.5), formatters)
+        s:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, function(_, v)
+            ns.db[key] = RoundTo(v, step)
+            Apply()
+        end, holder)
+        holder.Refresh = function() s:SetValue(ns.db[key]) end
+    else
+        local fs = FallbackSlider(holder, key, minV, maxV, step, fmt)
+        fs:SetPoint("TOPLEFT", text, "BOTTOMLEFT", 0, -8)
+        holder.Refresh = fs.Refresh
+    end
+    return Register(holder)
 end
 
 local function OpenColorPicker(c, hasAlpha, onChange)
@@ -211,398 +236,189 @@ local function OpenColorPicker(c, hasAlpha, onChange)
     end
 end
 
-local function Swatch(parent, label, key, hasAlpha)
-    local f = CreateFrame("Button", nil, parent)
-    f:SetSize(280, 20)
+local function Swatch(parent, key, label, hasAlpha, x, y)
+    local btn = CreateFrame("Button", nil, parent)
+    btn:SetSize(270, 22)
+    btn:SetPoint("TOPLEFT", x, y)
 
-    local box = CreateFrame("Frame", nil, f)
-    box:SetSize(28, 16)
-    box:SetPoint("RIGHT", 0, 0)
-    Box(box, 0.3, 0.3, 0.3, 1)
-    local col = box:CreateTexture(nil, "ARTWORK")
-    col:SetPoint("TOPLEFT", 1, -1)
-    col:SetPoint("BOTTOMRIGHT", -1, 1)
-    Border(box, 0.7, 0.7, 0.7, 1)
-
-    local text = Label(f, label, 12, 1, 1, 1)
+    local text = btn:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     text:SetPoint("LEFT", 0, 0)
+    text:SetText(label)
 
-    local hl = f:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints(box)
-    hl:SetColorTexture(1, 1, 1, 0.2)
+    local border = btn:CreateTexture(nil, "BACKGROUND")
+    border:SetSize(34, 18)
+    border:SetPoint("LEFT", 170, 0)
+    border:SetColorTexture(0.8, 0.8, 0.8, 1)
+    local checker = btn:CreateTexture(nil, "BORDER")
+    checker:SetPoint("TOPLEFT", border, 1, -1)
+    checker:SetPoint("BOTTOMRIGHT", border, -1, 1)
+    checker:SetColorTexture(0.25, 0.25, 0.25, 1)
+    local col = btn:CreateTexture(nil, "ARTWORK")
+    col:SetAllPoints(checker)
 
-    f.Refresh = function()
+    local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+    hl:SetAllPoints(border)
+    hl:SetColorTexture(1, 1, 1, 0.25)
+
+    btn.Refresh = function()
         local c = ns.db[key]
         col:SetColorTexture(c.r, c.g, c.b, hasAlpha and (c.a or 1) or 1)
     end
-    f:SetScript("OnClick", function()
+    btn:SetScript("OnClick", function()
         OpenColorPicker(ns.db[key], hasAlpha, function()
-            f.Refresh()
+            btn.Refresh()
             Apply()
         end)
     end)
-    return f
+    return Register(btn)
 end
 
-local COL_W = 280
+local function BuildPanel()
+    panel = CreateFrame("Frame")
+    panel.name = PANEL_NAME
 
-local function Section(parent, text)
-    local fs = Label(parent, text, 13, 1, 1, 1)
-    local line = parent:CreateTexture(nil, "ARTWORK")
-    line:SetColorTexture(1, 0.75, 0.1, 0.5)
-    line:SetHeight(1)
-    line:SetPoint("LEFT", fs, "RIGHT", 8, 0)
-    line:SetWidth(COL_W - fs:GetStringWidth() - 8)
-    return fs
-end
+    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    title:SetPoint("TOPLEFT", 16, -16)
+    title:SetText(PANEL_NAME)
 
-local function BuildWindow()
-    window = CreateFrame("Frame", "MirrasSimpleComboPointsOptions", UIParent)
-    window:SetSize(20 + COL_W + 30 + COL_W + 20, 500)
-    window:SetPoint("CENTER")
-    window:SetFrameStrata("DIALOG")
-    window:SetClampedToScreen(true)
-    window:SetMovable(true)
-    window:EnableMouse(true)
-    window:RegisterForDrag("LeftButton")
-    window:SetScript("OnDragStart", window.StartMoving)
-    window:SetScript("OnDragStop", window.StopMovingOrSizing)
-    window:Hide()
-    Box(window, 0.05, 0.05, 0.07, 0.95)
-    Border(window, 0.35, 0.35, 0.35, 1)
+    local sub = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
+    sub:SetText(L.SUBTITLE)
 
-    tinsert(UISpecialFrames, "MirrasSimpleComboPointsOptions")
+    local pTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    pTitle:SetPoint("TOPLEFT", 16, -64)
+    pTitle:SetText(L.PREVIEW)
+    local pSub = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    pSub:SetPoint("LEFT", pTitle, "RIGHT", 8, 0)
+    pSub:SetText(L.PREVIEW_DESC)
 
-    local header = CreateFrame("Frame", nil, window)
-    header:SetPoint("TOPLEFT"); header:SetPoint("TOPRIGHT")
-    header:SetHeight(30)
-    Box(header, 0.12, 0.12, 0.14, 1)
+    local box = CreateFrame("Frame", nil, panel)
+    box:SetPoint("TOPLEFT", 16, -84)
+    box:SetSize(584, 96)
+    local boxBg = box:CreateTexture(nil, "BACKGROUND")
+    boxBg:SetAllPoints()
+    boxBg:SetColorTexture(0, 0, 0, 0.35)
+    if box.SetClipsChildren then box:SetClipsChildren(true) end
 
-    local title = Label(header, "Mirra's Simple Combo Points", 14, 1, 0.82, 0)
-    title:SetPoint("LEFT", 12, 0)
-
-    local close = Button(header, "X", 22, function() window:Hide() end)
-    close:SetPoint("RIGHT", -4, 0)
-
-    local x, y
-    local function column(cx)
-        x, y = cx, -80
-    end
-    local function place(w, gap)
-        w:SetPoint("TOPLEFT", window, "TOPLEFT", x, y)
-        if w.SetWidth and w:GetWidth() > COL_W then w:SetWidth(COL_W) end
-        y = y - (w:GetHeight() + (gap or 10))
-        if w.Refresh then controls[#controls + 1] = w end
-        return w
-    end
-    local function section(text)
-        local fs = Section(window, text)
-        fs:SetPoint("TOPLEFT", window, "TOPLEFT", x, y)
-        y = y - 24
+    local function Border(f, inset)
+        local edge = f:CreateTexture(nil, "BACKGROUND", nil, -8)
+        edge:SetPoint("TOPLEFT", -inset - 2, inset + 2)
+        edge:SetPoint("BOTTOMRIGHT", inset + 2, -inset - 2)
+        edge:SetColorTexture(0, 0, 0, 1)
+        local gold = f:CreateTexture(nil, "BACKGROUND", nil, -7)
+        gold:SetPoint("TOPLEFT", -inset - 1, inset + 1)
+        gold:SetPoint("BOTTOMRIGHT", inset + 1, -inset - 1)
+        gold:SetColorTexture(0.86, 0.78, 0.6, 1)
+        local inner = f:CreateTexture(nil, "BACKGROUND", nil, -6)
+        inner:SetPoint("TOPLEFT", -inset, inset)
+        inner:SetPoint("BOTTOMRIGHT", inset, -inset)
+        inner:SetColorTexture(0, 0, 0, 1)
     end
 
-    local previewRow
-    local prev = Check(window, "Show preview",
-        function() return ns.preview end,
-        function(v)
-            ns.preview = v
-            if previewRow then previewRow:SetShown(v) end
-        end)
-    prev:SetPoint("TOPLEFT", 20, -44)
-    controls[#controls + 1] = prev
+    local plate = CreateFrame("StatusBar", nil, box)
+    plate:SetSize(146, 20)
+    plate:SetPoint("CENTER", -14, -10)
+    plate:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    plate:SetStatusBarColor(0.9, 0.02, 0.02)
+    plate:SetMinMaxValues(0, 1)
+    plate:SetValue(1)
+    Border(plate, 1)
 
-    previewRow = ns.CreatePreview(window, 22)
-    previewRow:SetPoint("LEFT", prev, "LEFT", 150, 0)
+    local plateName = plate:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    plateName:SetPoint("LEFT", 6, 0)
+    plateName:SetText(L.DUMMY_NAME)
+    local plateHP = plate:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    plateHP:SetPoint("RIGHT", -6, 0)
+    plateHP:SetText("164")
 
-    column(20)
-    section("Appearance")
-    place(Cycle(window, "Shape", "shape", {
-        { "round", "Round" },
-        { "square", "Square" },
-    }))
-    place(Slider(window, "Pip size", "size", 4, 40, 1))
-    place(Slider(window, "Spacing", "spacing", 0, 20, 1))
-    place(Slider(window, "Opacity", "alpha", 0.1, 1, 0.05, "%.2f"), 14)
+    local level = CreateFrame("Frame", nil, box)
+    level:SetSize(18, 18)
+    level:SetPoint("LEFT", plate, "RIGHT", 6, 0)
+    Border(level, 1)
+    local levelText = level:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    levelText:SetPoint("CENTER", 0, 0)
+    levelText:SetTextColor(0.1, 1, 0.1)
+    levelText:SetText("8")
 
-    section("Position")
-    place(Cycle(window, "Anchor", "anchor", {
-        { "TOP", "Above health bar" },
-        { "BOTTOM", "Below health bar" },
-    }))
-    place(Slider(window, "Horizontal offset", "offsetX", -100, 100, 1))
-    place(Slider(window, "Vertical offset", "offsetY", -50, 50, 1))
+    local preview = ns.CreatePreview(box, plate)
+    preview:SetFrameLevel(plate:GetFrameLevel() + 5)
 
-    column(20 + COL_W + 30)
-    section("Colors")
-    place(Cycle(window, "Color mode", "colorMode", {
-        { "gradient", "Gradient" },
-        { "single", "Single color" },
-    }))
-    place(Swatch(window, "Color (or gradient start)", "colorStart"))
-    place(Swatch(window, "Gradient end", "colorEnd"))
-    place(Check(window, "Custom color when all points are full",
-        function() return ns.db.useFullColor end,
-        function(v) ns.db.useFullColor = v end))
-    place(Swatch(window, "Full points color", "colorFull"))
-    place(Swatch(window, "Empty slot color (with opacity)", "colorEmpty", true), 14)
+    local LX, RX = 16, 330
+    local y = -196
+    SectionHeader(panel, L.APPEARANCE, LX, y)
+    Cycle(panel, "shape", L.SHAPE, { { "square", L.SQUARE }, { "round", L.ROUND } }, LX, y - 22)
+    Slider(panel, "size", L.SIZE, 4, 40, 1, nil, LX, y - 52)
+    Slider(panel, "spacing", L.SPACING, 0, 20, 1, nil, LX, y - 98)
+    Slider(panel, "alpha", L.OPACITY, 0.1, 1, 0.05,
+        function(v) return string.format("%d%%", v * 100 + 0.5) end, LX, y - 144)
 
-    section("Behavior")
-    place(Check(window, "Show empty slots",
-        function() return ns.db.showEmpty end,
-        function(v) ns.db.showEmpty = v end))
-    place(Check(window, "Hide at 0 combo points",
-        function() return ns.db.hideEmpty end,
-        function(v) ns.db.hideEmpty = v end))
-    place(Check(window, "Show login message in chat",
-        function() return ns.db.loginMessage end,
-        function(v) ns.db.loginMessage = v end))
+    SectionHeader(panel, L.POSITION, LX, y - 198)
+    Cycle(panel, "anchor", L.ANCHOR, { { "TOP", L.ABOVE }, { "BOTTOM", L.BELOW } }, LX, y - 220)
+    Slider(panel, "offsetX", L.OFFSET_X, -100, 100, 1, nil, LX, y - 250)
+    Slider(panel, "offsetY", L.OFFSET_Y, -50, 50, 1, nil, LX, y - 296)
 
-    local reset = Button(window, "Reset", 120, function()
+    SectionHeader(panel, L.COLORS, RX, y)
+    Cycle(panel, "colorMode", L.COLOR_MODE, { { "gradient", L.GRADIENT }, { "single", L.SINGLE } }, RX, y - 22)
+    Swatch(panel, "colorStart", L.COLOR_START, false, RX, y - 52)
+    Swatch(panel, "colorEnd", L.COLOR_END, false, RX, y - 78)
+    Checkbox(panel, "useFullColor", L.FULL, L.FULL_DESC, RX, y - 104)
+    Swatch(panel, "colorFull", L.COLOR_FULL, false, RX, y - 144)
+    Swatch(panel, "colorEmpty", L.COLOR_EMPTY, true, RX, y - 170)
+
+    SectionHeader(panel, L.BEHAVIOR, RX, y - 198)
+    Checkbox(panel, "showEmpty", L.SHOW_EMPTY, L.SHOW_EMPTY_DESC, RX, y - 218)
+    Checkbox(panel, "hideEmpty", L.HIDE_ZERO, L.HIDE_ZERO_DESC, RX, y - 258)
+
+    local resetBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    resetBtn:SetSize(180, 24)
+    resetBtn:SetPoint("TOPLEFT", LX, y - 350)
+    resetBtn:SetText(L.RESET)
+    resetBtn:SetScript("OnClick", function()
         for k, v in pairs(ns.defaults) do ns.db[k] = ns.Copy(v) end
-        ns.RefreshOptions()
+        panel:Refresh()
         Apply()
+        print(PREFIX .. L.RESET_DONE)
     end)
-    reset:SetPoint("BOTTOMLEFT", 20, 16)
 
-    local done = Button(window, "Close", 120, function() window:Hide() end)
-    done:SetPoint("BOTTOMRIGHT", -20, 16)
+    local hint = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+    hint:SetPoint("TOPLEFT", resetBtn, "BOTTOMLEFT", 2, -10)
+    hint:SetWidth(560)
+    hint:SetJustifyH("LEFT")
+    hint:SetText(L.HINT)
 
-    window:SetScript("OnShow", function()
-        ns.RefreshOptions()
-        previewRow:SetShown(ns.preview)
+    function panel:Refresh()
+        for _, c in ipairs(controls) do c.Refresh() end
+    end
+    panel:SetScript("OnShow", function(self)
+        self:Refresh()
+        preview:Show()
     end)
-    window:SetScript("OnHide", function()
-        ns.preview = false
-        previewRow:Hide()
-    end)
-end
-
-function ns.RefreshOptions()
-    if not window then return end
-    for _, c in ipairs(controls) do c.Refresh() end
-end
-
-local function OpenCustomWindow()
-    if not window then BuildWindow() end
-    if window:IsShown() then window:Hide() else window:Show() end
-end
-
-local ADDON_TITLE = "Mirra's Simple Combo Points"
-local nativeCategory
-local nativeSettings = {}
-
-local function BuildNativePanel()
-    local S = Settings
-    local category, layout = S.RegisterVerticalLayoutCategory(ADDON_TITLE)
-    local VT = S.VarType
-    local db, defaults = ns.db, ns.defaults
-
-    local function OnChanged() Apply() end
-
-    local function Register(key, varType, name)
-        local variable = "MSCP_" .. key
-        local setting = S.RegisterAddOnSetting(category, variable, key, db, varType, name, defaults[key])
-        S.SetOnValueChangedCallback(variable, OnChanged)
-        nativeSettings[key] = setting
-        return setting
-    end
-
-    local function Header(text)
-        if CreateSettingsListSectionHeaderInitializer then
-            layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text))
-        end
-    end
-
-    local function Checkbox(key, name, tooltip)
-        S.CreateCheckbox(category, Register(key, VT.Boolean, name), tooltip)
-    end
-
-    local function Slider(key, name, minV, maxV, step, fmt, tooltip)
-        local setting = Register(key, VT.Number, name)
-        local opts = S.CreateSliderOptions(minV, maxV, step)
-        if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label then
-            opts:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(v)
-                return string.format(fmt or "%d", v)
-            end)
-        end
-        S.CreateSlider(category, setting, opts, tooltip)
-    end
-
-    local CreateDropdown = S.CreateDropdown or S.CreateDropDown
-    local function Dropdown(key, name, choices, tooltip)
-        local setting = Register(key, VT.String, name)
-        local function GetOptions()
-            local c = S.CreateControlTextContainer()
-            for _, o in ipairs(choices) do c:Add(o[1], o[2]) end
-            return c:GetData()
-        end
-        CreateDropdown(category, setting, GetOptions, tooltip)
-    end
-
-    local function ActionButton(name, buttonText, onClick, tooltip)
-        layout:AddInitializer(CreateSettingsButtonInitializer(name, buttonText, onClick, tooltip, true))
-    end
-
-    local function ColorButton(key, name, hasAlpha)
-        ActionButton(name, "Choose color", function()
-            OpenColorPicker(db[key], hasAlpha, Apply)
-        end, "Opens the color picker.")
-    end
-
-    local previewGroup, previewInit
-    if S.RegisterProxySetting then
-        local preview = S.RegisterProxySetting(category, "MSCP_preview", VT.Boolean,
-            "Show preview", false,
-            function() return ns.preview end,
-            function(v)
-                ns.preview = v
-                if previewGroup and previewGroup.owner then previewGroup:SetShown(v) end
-            end)
-        previewInit = S.CreateCheckbox(category, preview,
-            "Shows the combo points right here, cycling through 1 to max, so you can see your changes.")
-    end
-
-    local function Attach(frame)
-        if not previewGroup then previewGroup = ns.CreatePreview(frame, 22) end
-        local g = previewGroup
-        g:SetParent(frame)
-        g:SetFrameLevel(frame:GetFrameLevel() + 5)
-        g:ClearAllPoints()
-        local cb = frame.Checkbox or frame.CheckBox
-        if cb then
-            g:SetPoint("LEFT", cb, "RIGHT", 24, 0)
-        else
-            g:SetPoint("RIGHT", frame, "RIGHT", -20, 0)
-        end
-        g.owner = frame
-        g:SetShown(ns.preview)
-
-        if not frame.mscpHooked then
-            frame.mscpHooked = true
-            frame:HookScript("OnHide", function(f)
-                if g.owner == f then g:Hide() end
-            end)
-            if frame.Init then
-                hooksecurefunc(frame, "Init", function(f, init)
-                    if init ~= previewInit and g.owner == f then
-                        g.owner = nil
-                        g:Hide()
-                    end
-                end)
-            end
-        end
-    end
-
-    if previewInit and previewInit.InitFrame then
-        local origInit = previewInit.InitFrame
-        previewInit.InitFrame = function(self, frame, ...)
-            origInit(self, frame, ...)
-            pcall(Attach, frame)
-        end
-    end
-
-    Header("Appearance")
-    Dropdown("shape", "Shape", { { "round", "Round" }, { "square", "Square" } })
-    Slider("size", "Pip size", 4, 40, 1)
-    Slider("spacing", "Spacing", 0, 20, 1)
-    Slider("alpha", "Opacity", 0.1, 1, 0.05, "%.2f")
-
-    Header("Position")
-    Dropdown("anchor", "Anchor", { { "TOP", "Above health bar" }, { "BOTTOM", "Below health bar" } })
-    Slider("offsetX", "Horizontal offset", -100, 100, 1)
-    Slider("offsetY", "Vertical offset", -50, 50, 1)
-
-    Header("Colors")
-    Dropdown("colorMode", "Color mode", { { "gradient", "Gradient" }, { "single", "Single color" } })
-    ColorButton("colorStart", "Color (or gradient start)")
-    ColorButton("colorEnd", "Gradient end")
-    Checkbox("useFullColor", "Custom color when full", "Use a separate color when all combo points are up.")
-    ColorButton("colorFull", "Full points color")
-    ColorButton("colorEmpty", "Empty slot color", true)
-
-    Header("Behavior")
-    Checkbox("showEmpty", "Show empty slots", "Show dark circles for missing combo points.")
-    Checkbox("hideEmpty", "Hide at 0 combo points", "Hide everything while you have no combo points on the target.")
-    Checkbox("loginMessage", "Show login message in chat")
-
-    Header("Other")
-    ActionButton("Reset", "Reset all", function()
-        for k, v in pairs(defaults) do
-            if nativeSettings[k] then
-                nativeSettings[k]:SetValue(v)
-            else
-                db[k] = ns.Copy(v)
-            end
-        end
-        Apply()
-    end, "Restores all settings, including colors, to their defaults.")
-
-    S.RegisterAddOnCategory(category)
-    nativeCategory = category
-
-    if SettingsPanel then
-        SettingsPanel:HookScript("OnHide", function()
-            ns.preview = false
-            if previewGroup then previewGroup:Hide() end
-        end)
-    end
-end
-
-function ns.OpenOptions()
-    if nativeCategory then
-        if SettingsPanel and SettingsPanel:IsShown() then
-            pcall(HideUIPanel, SettingsPanel)
-            return
-        end
-        local id = nativeCategory.GetID and nativeCategory:GetID() or nativeCategory.ID
-        local ok = pcall(Settings.OpenToCategory, id)
-        if ok then return end
-    end
-    OpenCustomWindow()
-end
-
-local function RegisterFallbackPanel()
-    local panel = CreateFrame("Frame")
-    panel.name = ADDON_TITLE
-
-    local t = Label(panel, ADDON_TITLE, 16, 1, 0.82, 0)
-    t:SetPoint("TOPLEFT", 16, -16)
-    local d = Label(panel, "The settings are in a separate window.\nYou can also type /mscp in chat.", 12, 1, 1, 1)
-    d:SetJustifyH("LEFT")
-    d:SetPoint("TOPLEFT", t, "BOTTOMLEFT", 0, -10)
-
-    local b = Button(panel, "Open settings", 180, function()
-        if SettingsPanel and SettingsPanel:IsShown() then
-            pcall(HideUIPanel, SettingsPanel)
-        end
-        if not window then BuildWindow() end
-        window:Show()
-    end)
-    b:SetPoint("TOPLEFT", d, "BOTTOMLEFT", 0, -14)
+    panel:SetScript("OnHide", function() preview:Hide() end)
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
-        pcall(function()
-            local cat = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
-            Settings.RegisterAddOnCategory(cat)
-        end)
+        category = Settings.RegisterCanvasLayoutCategory(panel, PANEL_NAME)
+        Settings.RegisterAddOnCategory(category)
     elseif InterfaceOptions_AddCategory then
-        pcall(InterfaceOptions_AddCategory, panel)
+        InterfaceOptions_AddCategory(panel)
     end
 end
 
 function ns.BuildOptions()
-    local ok, err = false, "Settings API not available"
-    if Settings and Settings.RegisterVerticalLayoutCategory and CreateSettingsButtonInitializer then
-        ok, err = pcall(BuildNativePanel)
-    end
-    if not ok then
-        nativeCategory = nil
-        ns.nativeError = err
-        RegisterFallbackPanel()
-    end
+    BuildPanel()
 end
 
-ns.OpenCustomWindow = OpenCustomWindow
+function ns.RefreshOptions()
+    if panel and panel:IsShown() then panel:Refresh() end
+end
+
+function ns.OpenOptions()
+    if Settings and Settings.OpenToCategory and category then
+        Settings.OpenToCategory(category:GetID())
+    elseif InterfaceOptionsFrame_OpenToCategory and panel then
+        InterfaceOptionsFrame_OpenToCategory(panel)
+        InterfaceOptionsFrame_OpenToCategory(panel)
+    end
+end
 
 function MirrasSimpleComboPoints_OnCompartmentClick()
     ns.OpenOptions()
