@@ -15,7 +15,6 @@ local defaults = {
     hideEmpty = true,
     showEmpty = true,
     alpha     = 1,
-    loginMessage = true,
     shape     = "square",
     colorMode = "gradient",
     colorStart = { r = 1,   g = 0.9,  b = 0.1 },
@@ -33,7 +32,6 @@ local function Copy(v)
     return t
 end
 ns.Copy = Copy
-ns.preview = false
 
 local db
 local container
@@ -217,20 +215,23 @@ local function Update()
     lastReason = "shown (" .. src .. (secret and ", protected value" or ", " .. tostring(cur) .. "/" .. max) .. ")"
 end
 
-function ns.CreatePreview(parent, maxHeight)
+function ns.CreatePreview(parent, anchor)
     local g = CreateGroup(parent)
     g:Hide()
-    local t = 0
+    local t = 1
     g:SetScript("OnUpdate", function(self, dt)
         t = t + dt
-        if t < 0.1 then return end
+        if t < 0.1 or not db then return end
         t = 0
-        if not (ns.preview and db) then self:Hide() return end
         local _, max = GetCombo()
         local n = math.floor(GetTime() / 0.8) % max + 1
+        self:ClearAllPoints()
+        if db.anchor == "BOTTOM" then
+            self:SetPoint("TOP", anchor, "BOTTOM", db.offsetX, -db.offsetY)
+        else
+            self:SetPoint("BOTTOM", anchor, "TOP", db.offsetX, db.offsetY)
+        end
         PaintGroup(self, n, max)
-        local h = maxHeight or 24
-        self:SetScale(db.size > h and h / db.size or 1)
     end)
     return g
 end
@@ -261,12 +262,10 @@ ev:SetScript("OnEvent", function(self, event, arg1)
             if db[k] == nil then db[k] = Copy(v) end
         end
         db.source = nil
+        db.loginMessage = nil
         ns.db = db
         BuildFrames()
         if ns.BuildOptions then ns.BuildOptions() end
-        if db.loginMessage then
-            Print("loaded – type /mscp to open the settings.")
-        end
         return
     end
     if not db then return end
@@ -314,12 +313,8 @@ SlashCmdList.MIRRASSIMPLECOMBOPOINTS = function(input)
     if cmd == "" or cmd == "config" or cmd == "options" then
         if ns.OpenOptions then ns.OpenOptions() end
         return
-    elseif cmd == "window" then
-        if ns.OpenCustomWindow then ns.OpenCustomWindow() end
-        return
     elseif cmd == "debug" then
         Debug()
-        if ns.nativeError then print("  Native settings panel failed:", tostring(ns.nativeError)) end
         return
     elseif cmd == "size" and n then
         db.size = math.max(4, math.min(40, n))
@@ -334,9 +329,6 @@ SlashCmdList.MIRRASSIMPLECOMBOPOINTS = function(input)
     elseif cmd == "empty" then
         db.hideEmpty = not db.hideEmpty
         Print("Hide at 0 points: " .. (db.hideEmpty and "on" or "off"))
-    elseif cmd == "login" then
-        db.loginMessage = not db.loginMessage
-        Print("Login message: " .. (db.loginMessage and "on" or "off"))
     elseif cmd == "slots" then
         db.showEmpty = not db.showEmpty
         Print("Show empty slots: " .. (db.showEmpty and "on" or "off"))
@@ -348,8 +340,7 @@ SlashCmdList.MIRRASSIMPLECOMBOPOINTS = function(input)
         return
     else
         Print("Commands:")
-        print("  /mscp                  – open settings (Options -> AddOns)")
-        print("  /mscp window           – open the compact settings window")
+        print("  /mscp                  – open settings")
         print("  /mscp debug            – print diagnostics")
         print("  /mscp size <4-40>      – pip size (current " .. db.size .. ")")
         print("  /mscp spacing <0-20>   – spacing (current " .. db.spacing .. ")")
@@ -357,7 +348,6 @@ SlashCmdList.MIRRASSIMPLECOMBOPOINTS = function(input)
         print("  /mscp top | bottom     – above/below the health bar")
         print("  /mscp empty            – toggle hide at 0 points")
         print("  /mscp slots            – toggle empty slots")
-        print("  /mscp login            – toggle login chat message")
         print("  /mscp reset            – restore defaults")
         return
     end
